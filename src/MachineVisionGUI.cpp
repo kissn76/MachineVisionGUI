@@ -11,15 +11,16 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <iostream>
+#include <map>
 
 std::vector<std::string> operations;
+std::map<std::string, cv::Mat> images;
 std::string operation_parameter_delimiter = "|";
 
 auto split(const std::string &str, const std::string &delim)
 {
     std::vector<std::string> vs;
-    size_t pos
-    { };
+    size_t pos{};
 
     for (size_t fd = 0; (fd = str.find(delim, pos)) != std::string::npos; pos = fd + delim.size())
         vs.emplace_back(str.data() + pos, str.data() + fd);
@@ -28,7 +29,7 @@ auto split(const std::string &str, const std::string &delim)
     return vs;
 }
 
-int opencv_imread(cv::Mat *output_image, std::vector<std::string> parameters)
+int opencv_imread(std::string output_name, std::vector<std::string> parameters)
 {
     std::string image_path;
     int imread_mode;
@@ -45,11 +46,11 @@ int opencv_imread(cv::Mat *output_image, std::vector<std::string> parameters)
         return 0;
     }
 
-    *output_image = img;
+    images.insert({output_name, img});
     return 1;
 }
 
-int opencv_threshold(cv::Mat *output_image, cv::Mat *input_image, std::vector<std::string> parameters)
+int opencv_threshold(std::string output_name, std::string input_name, std::vector<std::string> parameters)
 {
     double threshold_value;
     double max_binary_value;
@@ -63,13 +64,13 @@ int opencv_threshold(cv::Mat *output_image, cv::Mat *input_image, std::vector<st
         threshold_type = stoi(parameters[2]);
 
     cv::Mat img;
-    cv::threshold(*input_image, img, threshold_value, max_binary_value, threshold_type);
+    cv::threshold(images[input_name], img, threshold_value, max_binary_value, threshold_type);
 
-    *output_image = img;
+    images.insert({output_name, img});
     return 1;
 }
 
-int opencv_cvtColor(cv::Mat *output_image, cv::Mat *input_image, std::vector<std::string> parameters)
+int opencv_cvtColor(std::string output_name, std::string input_name, std::vector<std::string> parameters)
 {
     int color_conversion_code;
     int output_channels_number = 0;
@@ -80,13 +81,13 @@ int opencv_cvtColor(cv::Mat *output_image, cv::Mat *input_image, std::vector<std
         output_channels_number = stoi(parameters[1]);
 
     cv::Mat img;
-    cv::cvtColor(*input_image, img, color_conversion_code, output_channels_number);
+    cv::cvtColor(images[input_name], img, color_conversion_code, output_channels_number);
 
-    *output_image = img;
+    images.insert({output_name, img});
     return 1;
 }
 
-int opencv_blur(cv::Mat *output_image, cv::Mat *input_image, std::vector<std::string> parameters)
+int opencv_blur(std::string output_name, std::string input_name, std::vector<std::string> parameters)
 {
     cv::Size kernel_size;
     cv::Point anchor_point(-1, -1);
@@ -104,9 +105,9 @@ int opencv_blur(cv::Mat *output_image, cv::Mat *input_image, std::vector<std::st
         border_type = stoi(parameters[4]);
 
     cv::Mat img;
-    cv::blur(*input_image, img, kernel_size, anchor_point, border_type);
+    cv::blur(images[input_name], img, kernel_size, anchor_point, border_type);
 
-    *output_image = img;
+    images.insert({output_name, img});
     return 1;
 }
 
@@ -136,42 +137,38 @@ void operations_process()
 
         if (command == "opencv_imread")
         {
-            err = opencv_imread(&img, tags);
+            err = opencv_imread("original", tags);
         }
 
         if (command == "opencv_threshold")
         {
-            err = opencv_threshold(&img, &img, tags);
+            err = opencv_threshold("threshold", "original", tags);
         }
 
         if (command == "opencv_cvtColor")
         {
-            err = opencv_cvtColor(&img, &img, tags);
+            err = opencv_cvtColor("recolored", "threshold", tags);
         }
 
         if (command == "opencv_blur")
         {
-            err = opencv_blur(&img, &img, tags);
+            err = opencv_blur("blured", "recolored", tags);
         }
     }
 
-    imshow("Display window", img);
+    imshow("Display window", images["blured"]);
     int k = cv::waitKey(0); // Wait for a keystroke in the window
 }
 
 int main()
 {
-    operation_add("opencv_imread",
-    { "/home/nn/Képek/ocv.jpg", std::to_string(cv::IMREAD_COLOR) });
+    operation_add("opencv_imread", {"/home/nn/Képek/ocv.jpg", std::to_string(cv::IMREAD_COLOR)});
 
-    operation_add("opencv_blur",
-    { "5", "5" });
+    operation_add("opencv_blur", {"5", "5"});
 
-    operation_add("opencv_cvtColor",
-    { std::to_string(cv::COLOR_RGB2GRAY) });
+    operation_add("opencv_cvtColor", {std::to_string(cv::COLOR_RGB2GRAY)});
 
-    operation_add("opencv_threshold",
-    { "100", "255", std::to_string(cv::THRESH_BINARY) });
+    operation_add("opencv_threshold", {"100", "255", std::to_string(cv::THRESH_BINARY)});
 
     operations_process();
 
