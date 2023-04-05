@@ -13,21 +13,8 @@
 #include <iostream>
 #include <map>
 
-std::vector<std::string> operations;
+std::vector<std::pair<std::string, int>> operations;
 std::map<std::string, cv::Mat> images;
-std::string operation_parameter_delimiter = "|";
-
-auto split(const std::string &str, const std::string &delim)
-{
-    std::vector<std::string> vs;
-    size_t pos{};
-
-    for (size_t fd = 0; (fd = str.find(delim, pos)) != std::string::npos; pos = fd + delim.size())
-        vs.emplace_back(str.data() + pos, str.data() + fd);
-
-    vs.emplace_back(str.data() + pos, str.data() + str.size());
-    return vs;
-}
 
 int opencv_imread(std::vector<std::string> parameters)
 {
@@ -106,9 +93,19 @@ int opencv_cvtColor(std::vector<std::string> parameters)
     return 1;
 }
 
-int opencv_blur(cv::Mat image_input, cv::Mat image_output, cv::Size kernel_size, cv::Point anchor_point, int border_type)
+int opencv_blur_counter = 0;
+struct opencv_blur_parameters
 {
-    cv::blur(image_input, image_output, kernel_size, anchor_point, border_type);
+    std::string input_name;
+    std::string output_name;
+    cv::Size kernel_size;
+    cv::Point anchor_point;
+    int border_type;
+};
+std::map<int, opencv_blur_parameters> opencv_blur_parameters_list;
+int opencv_blur(cv::Mat image_input, cv::Mat image_output, opencv_blur_parameters parameters)
+{
+    cv::blur(image_input, image_output, parameters.kernel_size, parameters.anchor_point, parameters.border_type);
 
     return 1;
 }
@@ -124,35 +121,71 @@ void opencv_imshow(std::string window_name, cv::Mat image)
     }
 }
 
-void operations_init()
+void operation_add(std::string command, std::map<std::string, std::string> parameters)
 {
-}
+    int counter = 0;
 
-void operation_add(std::string command, std::vector<std::string> parameters)
-{
-    std::string operation = command;
-
-    for (auto parameter : parameters)
+    if (command == "opencv_blur")
     {
-        operation += operation_parameter_delimiter;
-        operation += parameter;
+        counter = opencv_blur_counter++;
+
+        opencv_blur_parameters param;
+        param.kernel_size.width = 3;
+        param.kernel_size.height = 3;
+        param.anchor_point.x = -1;
+        param.anchor_point.y = -1;
+        param.border_type = cv::BORDER_DEFAULT;
+
+        std::map<std::string, std::string>::iterator it;
+
+        it = parameters.find("input_name");
+        if (it != parameters.end())
+            param.input_name = parameters["input_name"];
+
+        it = parameters.find("output_name");
+        if (it != parameters.end())
+            param.output_name = parameters["output_name"];
+
+        it = parameters.find("kernel_size_width");
+        if (it != parameters.end())
+            param.kernel_size.width = stoi(parameters["kernel_size_width"]);
+
+        it = parameters.find("kernel_size_width");
+        if (it != parameters.end())
+            param.kernel_size.width = stoi(parameters["kernel_size_width"]);
+
+        it = parameters.find("kernel_size_height");
+        if (it != parameters.end())
+            param.kernel_size.height = stoi(parameters["kernel_size_height"]);
+
+        it = parameters.find("anchor_point_x");
+        if (it != parameters.end())
+            param.anchor_point.x = stoi(parameters["anchor_point_x"]);
+
+        it = parameters.find("anchor_point_y");
+        if (it != parameters.end())
+            param.anchor_point.y = stoi(parameters["anchor_point_y"]);
+
+        it = parameters.find("border_type");
+        if (it != parameters.end())
+            param.border_type = stoi(parameters["border_type"]);
+
+        opencv_blur_parameters_list.insert(std::pair<int, opencv_blur_parameters>(counter, param));
     }
 
-    operations.push_back(operation);
+    operations.push_back(std::pair<std::string, int>(command, counter));
 }
 
 void operations_process()
 {
     int err = 0;
-    operations_init();
 
     while (true)
     {
         for (auto operation : operations)
         {
-            std::vector<std::string> parameters = split(operation, operation_parameter_delimiter);
-            std::string command = parameters[0];
-            parameters.erase(parameters.begin());
+            std::string command = operation.first;
+            int counter = operation.second;
 
             if (command == "opencv_imread")
             {
@@ -171,32 +204,12 @@ void operations_process()
 
             if (command == "opencv_blur")
             {
-                std::string input_name;
-                std::string output_name;
-                cv::Size kernel_size;
-                cv::Point anchor_point(-1, -1);
-                int border_type = cv::BORDER_DEFAULT;
-
-                long unsigned int par = 0;
-                if (parameters.size() > par)
-                    input_name = parameters[par++];
-                if (parameters.size() > par)
-                    output_name = parameters[par++];
-                if (parameters.size() > par)
-                    kernel_size.width = stoi(parameters[par++]);
-                if (parameters.size() > par)
-                    kernel_size.height = stoi(parameters[par++]);
-                if (parameters.size() > par)
-                    anchor_point.x = stoi(parameters[par++]);
-                if (parameters.size() > par)
-                    anchor_point.y = stoi(parameters[par++]);
-                if (parameters.size() > par)
-                    border_type = stoi(parameters[par++]);
+                opencv_blur_parameters parameters = opencv_blur_parameters_list[counter]
 
                 cv::Mat image_output;
-                err = opencv_blur(images[input_name], image_output, kernel_size, anchor_point, border_type);
+                err = opencv_blur(images[parameters.input_name], image_output, parameters);
 
-                images.insert({output_name, image_output});
+                images.insert(std::pair<std::string, cv::Mat>(parameters.output_name, image_output));
             }
 
             if (command == "opencv_imshow")
@@ -220,7 +233,12 @@ int main()
 {
     operation_add("opencv_imread", {"/home/nn/Képek/ocv.jpg", "original", std::to_string(cv::IMREAD_COLOR)});
 
-    operation_add("opencv_blur", {"original", "blured", "5", "5"});
+    std::map<std::string, std::string> parameters;
+    parameters.insert({"input_name", "original"});
+    parameters.insert({"output_name", "blured"});
+    parameters.insert({"kernel_size_width", "5"});
+    parameters.insert({"kernel_size_height", "5"});
+    operation_add("opencv_blur", parameters);
 
     operation_add("opencv_cvtColor", {"blured", "recolored", std::to_string(cv::COLOR_RGB2GRAY)});
 
