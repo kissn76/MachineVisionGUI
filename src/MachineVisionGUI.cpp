@@ -16,91 +16,67 @@
 std::vector<std::pair<std::string, int>> operations;
 std::map<std::string, cv::Mat> images;
 
-int opencv_imread(std::vector<std::string> parameters)
+int opencv_imread_counter = 0;
+struct opencv_imread_parameters
 {
-    std::string output_name;
-    std::string image_path;
-    int imread_mode;
-
-    long unsigned int par = 0;
-    if (parameters.size() > par)
-        image_path = parameters[par++];
-    if (parameters.size() > par)
-        output_name = parameters[par++];
-    if (parameters.size() > par)
-        imread_mode = stoi(parameters[par++]);
-
-    cv::Mat img_out = cv::imread(image_path, imread_mode);
-    if (img_out.empty())
+        std::string image_path;
+        std::string output_name;
+        int imread_mode;
+};
+std::map<int, opencv_imread_parameters> opencv_imread_parameters_list;
+int opencv_imread(cv::Mat image_output, opencv_imread_parameters parameters)
+{
+    image_output = cv::imread(parameters.image_path, parameters.imread_mode);
+    if (image_output.empty())
     {
-        std::cout << "Could not read the image: " << image_path << std::endl;
+        std::cout << "Could not read the image: " << parameters.image_path << std::endl;
         return 0;
     }
 
-    images.insert({output_name, img_out});
+    return 1;
+}
+
+int opencv_threshold_counter = 0;
+struct opencv_threshold_parameters
+{
+        std::string input_name;
+        std::string output_name;
+        double threshold_value;
+        double max_binary_value;
+        int threshold_type;
+};
+std::map<int, opencv_threshold_parameters> opencv_threshold_parameters_list;
+int opencv_threshold(cv::Mat image_input, cv::Mat image_output, opencv_threshold_parameters parameters)
+{
+    cv::threshold(image_input, image_output, parameters.threshold_value, parameters.max_binary_value, parameters.threshold_type);
 
     return 1;
 }
 
-int opencv_threshold(std::vector<std::string> parameters)
+int opencv_cvtColor_counter = 0;
+struct opencv_cvtColor_parameters
 {
-    std::string input_name;
-    std::string output_name;
-    double threshold_value;
-    double max_binary_value;
-    int threshold_type;
-
-    long unsigned int par = 0;
-    if (parameters.size() > par)
-        input_name = parameters[par++];
-    if (parameters.size() > par)
-        output_name = parameters[par++];
-    if (parameters.size() > par)
-        threshold_value = stod(parameters[par++]);
-    if (parameters.size() > par)
-        max_binary_value = stod(parameters[par++]);
-    if (parameters.size() > par)
-        threshold_type = stoi(parameters[par++]);
-
-    cv::Mat img_out;
-    cv::threshold(images[input_name], img_out, threshold_value, max_binary_value, threshold_type);
-
-    images.insert({output_name, img_out});
-    return 1;
-}
-
-int opencv_cvtColor(std::vector<std::string> parameters)
+        std::string input_name;
+        std::string output_name;
+        int color_conversion_code;
+        int output_channels_number;
+};
+std::map<int, opencv_cvtColor_parameters> opencv_cvtColor_parameters_list;
+int opencv_cvtColor(cv::Mat image_input, cv::Mat image_output, opencv_cvtColor_parameters parameters)
 {
-    std::string input_name;
-    std::string output_name;
-    int color_conversion_code;
-    int output_channels_number = 0;
+    cv::cvtColor(image_input, image_output, parameters.color_conversion_code, parameters.output_channels_number);
 
-    long unsigned int par = 0;
-    if (parameters.size() > par)
-        input_name = parameters[par++];
-    if (parameters.size() > par)
-        output_name = parameters[par++];
-    if (parameters.size() > par)
-        color_conversion_code = stoi(parameters[par++]);
-    if (parameters.size() > par)
-        output_channels_number = stoi(parameters[par++]);
-
-    cv::Mat img_out;
-    cv::cvtColor(images[input_name], img_out, color_conversion_code, output_channels_number);
-
-    images.insert({output_name, img_out});
     return 1;
 }
 
 int opencv_blur_counter = 0;
 struct opencv_blur_parameters
 {
-    std::string input_name;
-    std::string output_name;
-    cv::Size kernel_size;
-    cv::Point anchor_point;
-    int border_type;
+        std::string input_name;
+        std::string output_name;
+        cv::Size kernel_size;
+        cv::Point anchor_point;
+        int border_type;
 };
 std::map<int, opencv_blur_parameters> opencv_blur_parameters_list;
 int opencv_blur(cv::Mat image_input, cv::Mat image_output, opencv_blur_parameters parameters)
@@ -110,10 +86,16 @@ int opencv_blur(cv::Mat image_input, cv::Mat image_output, opencv_blur_parameter
     return 1;
 }
 
-void opencv_imshow(std::string window_name, cv::Mat image)
+int opencv_imshow_counter = 0;
+struct opencv_imshow_parameters
 {
-
-    imshow(window_name, image);
+        std::string input_name;
+        std::string window_name;
+};
+std::map<int, opencv_imshow_parameters> opencv_imshow_parameters_list;
+void opencv_imshow(cv::Mat image_input, opencv_imshow_parameters parameters)
+{
+    imshow(parameters.window_name, image_input);
     int k = cv::waitKey(0); // Wait for a keystroke in the window
     if (k == 'q')
     {
@@ -124,6 +106,64 @@ void opencv_imshow(std::string window_name, cv::Mat image)
 void operation_add(std::string command, std::map<std::string, std::string> parameters)
 {
     int counter = 0;
+
+    if (command == "opencv_imread")
+    {
+        counter = opencv_imread_counter++;
+
+        opencv_imread_parameters param;
+        param.imread_mode = cv::IMREAD_UNCHANGED;
+
+        std::map<std::string, std::string>::iterator it;
+
+        it = parameters.find("image_path");
+        if (it != parameters.end())
+            param.image_path = parameters["image_path"];
+
+        it = parameters.find("output_name");
+        if (it != parameters.end())
+            param.output_name = parameters["output_name"];
+
+        it = parameters.find("imread_mode");
+        if (it != parameters.end())
+            param.imread_mode = stoi(parameters["imread_mode"]);
+
+        opencv_imread_parameters_list.insert({counter, param});
+    }
+
+    if (command == "opencv_threshold")
+    {
+        counter = opencv_threshold_counter++;
+
+        opencv_threshold_parameters param;
+        param.threshold_value = 50;
+        param.max_binary_value = 255;
+        param.threshold_type = cv::THRESH_BINARY;
+
+        std::map<std::string, std::string>::iterator it;
+
+        it = parameters.find("input_name");
+        if (it != parameters.end())
+            param.input_name = parameters["input_name"];
+
+        it = parameters.find("output_name");
+        if (it != parameters.end())
+            param.output_name = parameters["output_name"];
+
+        it = parameters.find("threshold_value");
+        if (it != parameters.end())
+            param.threshold_value = stod(parameters["threshold_value"]);
+
+        it = parameters.find("max_binary_value");
+        if (it != parameters.end())
+            param.max_binary_value = stod(parameters["max_binary_value"]);
+
+        it = parameters.find("threshold_type");
+        if (it != parameters.end())
+            param.threshold_type = stoi(parameters["threshold_type"]);
+
+        opencv_threshold_parameters_list.insert({counter, param});
+    }
 
     if (command == "opencv_blur")
     {
@@ -170,10 +210,54 @@ void operation_add(std::string command, std::map<std::string, std::string> param
         if (it != parameters.end())
             param.border_type = stoi(parameters["border_type"]);
 
-        opencv_blur_parameters_list.insert(std::pair<int, opencv_blur_parameters>(counter, param));
+        opencv_blur_parameters_list.insert({counter, param});
     }
 
-    operations.push_back(std::pair<std::string, int>(command, counter));
+    if (command == "opencv_cvtColor")
+    {
+        counter = opencv_cvtColor_counter++;
+
+        opencv_cvtColor_parameters param;
+        param.output_channels_number = 0;
+
+        std::map<std::string, std::string>::iterator it;
+
+        it = parameters.find("input_name");
+        if (it != parameters.end())
+            param.input_name = parameters["input_name"];
+
+        it = parameters.find("output_name");
+        if (it != parameters.end())
+            param.output_name = parameters["output_name"];
+
+        it = parameters.find("color_conversion_code");
+        if (it != parameters.end())
+            param.color_conversion_code = stoi(parameters["color_conversion_code"]);
+
+        it = parameters.find("output_channels_number");
+        if (it != parameters.end())
+            param.output_channels_number = stoi(parameters["output_channels_number"]);
+
+        opencv_cvtColor_parameters_list.insert({counter, param});
+    }
+
+    if (command == "opencv_imshow")
+    {
+        counter = opencv_imshow_counter++;
+
+        opencv_imshow_parameters param;
+        param.window_name = "Display";
+
+        std::map<std::string, std::string>::iterator it;
+
+        it = parameters.find("window_name");
+        if (it != parameters.end())
+            param.window_name = parameters["window_name"];
+
+        opencv_imshow_parameters_list.insert({counter, param});
+    }
+
+    operations.push_back({command, counter});
 }
 
 void operations_process()
@@ -189,41 +273,49 @@ void operations_process()
 
             if (command == "opencv_imread")
             {
-                err = opencv_imread(parameters);
+                opencv_imread_parameters parameters = opencv_imread_parameters_list[counter];
+
+                cv::Mat image_output;
+                err = opencv_imread(image_output, parameters);
+
+                images.insert({parameters.output_name, image_output});
             }
 
             if (command == "opencv_threshold")
             {
-                err = opencv_threshold(parameters);
+                opencv_threshold_parameters parameters = opencv_threshold_parameters_list[counter];
+
+                cv::Mat image_output;
+                err = opencv_threshold(images[parameters.input_name], image_output, parameters);
+
+                images.insert({parameters.output_name, image_output});
             }
 
             if (command == "opencv_cvtColor")
             {
-                err = opencv_cvtColor(parameters);
+                opencv_cvtColor_parameters parameters = opencv_cvtColor_parameters_list[counter];
+
+                cv::Mat image_output;
+                err = opencv_cvtColor(images[parameters.input_name], image_output, parameters);
+
+                images.insert({parameters.output_name, image_output});
             }
 
             if (command == "opencv_blur")
             {
-                opencv_blur_parameters parameters = opencv_blur_parameters_list[counter]
+                opencv_blur_parameters parameters = opencv_blur_parameters_list[counter];
 
                 cv::Mat image_output;
                 err = opencv_blur(images[parameters.input_name], image_output, parameters);
 
-                images.insert(std::pair<std::string, cv::Mat>(parameters.output_name, image_output));
+                images.insert({parameters.output_name, image_output});
             }
 
             if (command == "opencv_imshow")
             {
-                std::string window_name;
-                std::string input_name;
+                opencv_imshow_parameters parameters = opencv_imshow_parameters_list[counter];
 
-                long unsigned int par = 0;
-                if (parameters.size() > par)
-                    window_name = parameters[par++];
-                if (parameters.size() > par)
-                    input_name = parameters[par++];
-
-                opencv_imshow(window_name, images[input_name]);
+                opencv_imshow(images[parameters.input_name], parameters);
             }
         }
     }
@@ -231,20 +323,37 @@ void operations_process()
 
 int main()
 {
-    operation_add("opencv_imread", {"/home/nn/Képek/ocv.jpg", "original", std::to_string(cv::IMREAD_COLOR)});
-
     std::map<std::string, std::string> parameters;
+    parameters.insert({"image_path", "/home/nn/Képek/ocv.jpg"});
+    parameters.insert({"output_name", "original"});
+    parameters.insert({"imread_mode", std::to_string(cv::IMREAD_COLOR)});
+    operation_add("opencv_imread", parameters);
+
+    parameters.clear();
     parameters.insert({"input_name", "original"});
     parameters.insert({"output_name", "blured"});
     parameters.insert({"kernel_size_width", "5"});
     parameters.insert({"kernel_size_height", "5"});
     operation_add("opencv_blur", parameters);
 
-    operation_add("opencv_cvtColor", {"blured", "recolored", std::to_string(cv::COLOR_RGB2GRAY)});
+    parameters.clear();
+    parameters.insert({"input_name", "blured"});
+    parameters.insert({"output_name", "recolored"});
+    parameters.insert({"color_conversion_code", std::to_string(cv::COLOR_RGB2GRAY)});
+    operation_add("opencv_cvtColor", parameters);
 
-    operation_add("opencv_threshold", {"recolored", "threshold", "100", "255", std::to_string(cv::THRESH_BINARY)});
+    parameters.clear();
+    parameters.insert({"input_name", "recolored"});
+    parameters.insert({"output_name", "threshold"});
+    parameters.insert({"threshold_value", "100"});
+    parameters.insert({"max_binary_value", "255"});
+    parameters.insert({"threshold_type", std::to_string(cv::THRESH_BINARY)});
+    operation_add("opencv_threshold", parameters);
 
-    operation_add("opencv_imshow", {"Display window", "threshold"});
+    parameters.clear();
+    parameters.insert({"input_name", "threshold"});
+    parameters.insert({"window_name", "Display window"});
+    operation_add("opencv_imshow", parameters);
 
     operations_process();
 
